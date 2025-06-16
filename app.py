@@ -1,53 +1,49 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import ta
 import yfinance as yf
 
 st.set_page_config(page_title="Bilow Kherow Binary AI", layout="centered")
 
-st.title("📈 Bilow Kherow Binary AI")
-st.markdown("Get Smart Signals for 5s Expiry 🚀")
+st.title("📉 Bilow Kherow Binary AI")
+st.subheader("Smart 5-Second Signal Generator")
 
-symbol = st.selectbox("Choose a currency pair", ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"])
-btn = st.button("🔮 Get 5s Signal")
+st.markdown("Tap the button below to get a real-time signal (BUY ✅ or SELL ❌) based on live market indicators.")
 
-def get_signal(symbol):
-    data = yf.download(tickers=symbol + "=X", period="1d", interval="1m")
-    if data is None or data.empty:
-        return "No data available"
+button = st.button("🕔 Get 5s Signal")
 
-    df = data.copy()
-    df['EMA9'] = ta.trend.ema_indicator(df['Close'], window=9)
-    df['EMA21'] = ta.trend.ema_indicator(df['Close'], window=21)
-    df['MACD'] = ta.trend.macd_diff(df['Close'])
-    df['StochRSI'] = ta.momentum.stochrsi(df['Close'])
+if button:
+    st.info("Analyzing... Please wait 1–2 seconds.")
+    
+    # Get data from EUR/USD 1-minute chart (last 50 candles)
+    df = yf.download("EURUSD=X", interval="1m", period="30m")
+    df.dropna(inplace=True)
 
-    latest = df.iloc[-1]
-    signals = []
+    # Apply indicators
+    df['ema9'] = ta.trend.ema_indicator(df['Close'], window=9)
+    df['ema21'] = ta.trend.ema_indicator(df['Close'], window=21)
+    macd = ta.trend.macd_diff(df['Close'])
+    stoch_rsi = ta.momentum.stochrsi_k(df['Close'])
 
-    if latest['EMA9'] > latest['EMA21']:
-        signals.append("BUY")
+    # Latest values
+    latest_close = df['Close'].iloc[-1]
+    ema9_latest = df['ema9'].iloc[-1]
+    ema21_latest = df['ema21'].iloc[-1]
+    macd_latest = macd.iloc[-1]
+    stoch_latest = stoch_rsi.iloc[-1]
+
+    # Signal logic
+    confirmations = 0
+    if ema9_latest > ema21_latest:
+        confirmations += 1
+    if macd_latest > 0:
+        confirmations += 1
+    if stoch_latest > 50:
+        confirmations += 1
+
+    # Final signal
+    if confirmations >= 2:
+        st.success("✅ Signal: BUY")
     else:
-        signals.append("SELL")
-
-    if latest['MACD'] > 0:
-        signals.append("BUY")
-    else:
-        signals.append("SELL")
-
-    if latest['StochRSI'] < 0.2:
-        signals.append("BUY")
-    elif latest['StochRSI'] > 0.8:
-        signals.append("SELL")
-
-    if signals.count("BUY") >= 2:
-        return "✅ BUY"
-    elif signals.count("SELL") >= 2:
-        return "❌ SELL"
-    else:
-        return "🤔 WAIT"
-
-if btn:
-    with st.spinner("Analyzing market..."):
-        signal = get_signal(symbol)
-        st.success(f"Signal for {symbol}: **{signal}**")
+        st.error("❌ Signal: SELL")
